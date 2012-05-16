@@ -27,6 +27,7 @@
 static GpsInterface interface_wrapper;
 static GpsInterface* interface_internal = NULL;
 static GpsInterface* interface_external = NULL;
+static GpsCallbacks* device_callbacks = NULL;
 
 //Use 0 for internal and 1 for external
 static int current_type = 0;
@@ -56,9 +57,35 @@ static void wrapper_current_type() {
 
 }
 
-static int wrapper_init(GpsCallbacks* callbacks) {
-    //only change type on library init
+static void current_device_check(){
+    int old_type = current_type;
     wrapper_current_type();
+
+    LOGI("Check Current Device");
+
+    if (old_type == current_type){
+        LOGV("No Device Switch Needed");
+        return;
+    }
+
+    if (current_type == 0){
+        LOGV("Switch External -> Internal");
+        interface_external->cleanup();
+        interface_internal->init(device_callbacks);
+                
+    } else if (current_type == 1) {
+        LOGV("Switch Internal -> External");
+        interface_internal->cleanup();
+        interface_external->init(device_callbacks);
+    }
+
+    return;
+}
+
+static int wrapper_init(GpsCallbacks* callbacks) {
+
+    wrapper_current_type();
+    device_callbacks = callbacks;
 
     if (current_type ==0) {
         LOGI("Wrapper init (internalGPS)");
@@ -73,6 +100,8 @@ static int wrapper_init(GpsCallbacks* callbacks) {
 
 static int wrapper_start() {
     LOGV("Wrapper start");
+
+    current_device_check();
 
     if (current_type ==0)
        interface_internal->start();
@@ -89,6 +118,8 @@ static int wrapper_stop() {
         interface_internal->stop();
     else
         interface_external->stop();
+
+    current_device_check();
 
     return 0;
 }
@@ -268,7 +299,7 @@ static struct hw_module_methods_t gps_module_methods = {
 const struct hw_module_t HAL_MODULE_INFO_SYM = {
     .tag = HARDWARE_MODULE_TAG,
     .version_major = 0,
-    .version_minor = 1,
+    .version_minor = 2,
     .id = GPS_HARDWARE_MODULE_ID,
     .name = "TF201 GPS Wrapper",
     .author = "AndroidRoot.mobi",
